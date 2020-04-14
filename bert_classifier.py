@@ -21,7 +21,7 @@ from utils import mask_fill
 class BERTClassifier(pl.LightningModule):
     """
     Sample model to show how to use BERT to classify sentences.
-    
+
     :param hparams: ArgumentParser containing the hyperparameters.
     """
 
@@ -148,7 +148,7 @@ class BERTClassifier(pl.LightningModule):
         """
         Function that prepares a sample to input the model.
         :param sample: list of dictionaries.
-        
+
         Returns:
             - dictionary with the expected model inputs.
             - dictionary with the expected target labels.
@@ -172,7 +172,7 @@ class BERTClassifier(pl.LightningModule):
         """ 
         Runs one training step. This usually consists in the forward function followed
             by the loss function.
-        
+
         :param batch: The output of your dataloader. 
         :param batch_nb: Integer displaying which batch this is
 
@@ -213,15 +213,29 @@ class BERTClassifier(pl.LightningModule):
         val_acc = torch.sum(y == labels_hat).item() / (len(y) * 1.0)
         val_acc = torch.tensor(val_acc)
 
+        val_prc = torch.sum((y == 1) & (labels_hat == 1)).item() / (torch.sum(y == 1).item() * 1.0)
+        val_rec = torch.sum((y == 1) & (labels_hat == 1)).item() / (torch.sum(labels_hat == 1).item() * 1.0)
+        val_f1 = 2 * val_prc * val_rec / (val_prc + val_rec)
+
         if self.on_gpu:
             val_acc = val_acc.cuda(loss_val.device.index)
+            val_prc = val_prc.cuda(loss_val.device.index)
+            val_rec = val_rec.cuda(loss_val.device.index)
+            val_f1 = val_f1.cuda(loss_val.device.index)
 
         # in DP mode (default) make sure if result is scalar, there's another dim in the beginning
         if self.trainer.use_dp or self.trainer.use_ddp2:
             loss_val = loss_val.unsqueeze(0)
             val_acc = val_acc.unsqueeze(0)
+            val_prc = val_prc.unsqueeze(0)
+            val_rec = val_rec.unsqueeze(0)
+            val_f1 = val_f1.unsqueeze(0)
 
-        output = OrderedDict({"val_loss": loss_val, "val_acc": val_acc,})
+        output = OrderedDict({"val_loss": loss_val,
+                              "val_acc": val_acc,
+                              "val_prc": val_prc,
+                              "val_rec": val_rec,
+                              "val_f1": val_f1})
 
         # can also return just a scalar instead of a dict (return loss_val)
         return output
@@ -229,12 +243,15 @@ class BERTClassifier(pl.LightningModule):
     def validation_end(self, outputs: list) -> dict:
         """ Function that takes as input a list of dictionaries returned by the validation_step
         function and measures the model performance accross the entire validation set.
-        
+
         Returns:
             - Dictionary with metrics to be added to the lightning logger.  
         """
         val_loss_mean = 0
         val_acc_mean = 0
+        val_prc_mean = 0
+        val_rec_mean = 0
+        val_f1_mean = 0
         for output in outputs:
             val_loss = output["val_loss"]
 
@@ -250,9 +267,34 @@ class BERTClassifier(pl.LightningModule):
 
             val_acc_mean += val_acc
 
+            val_prc = output["val_prc"]
+            if self.trainer.use_dp or self.trainer.use_ddp2:
+                val_prc = torch.mean(val_prc)
+
+            val_prc_mean += val_prc
+
+            val_rec = output["val_rec"]
+            if self.trainer.use_dp or self.trainer.use_ddp2:
+                val_rec = torch.mean(val_rec)
+
+            val_rec_mean += val_rec
+
+            val_f1 = output["val_f1"]
+            if self.trainer.use_dp or self.trainer.use_ddp2:
+                val_f1 = torch.mean(val_f1)
+
+            val_f1_mean += val_f1
+
         val_loss_mean /= len(outputs)
         val_acc_mean /= len(outputs)
-        tqdm_dict = {"val_loss": val_loss_mean, "val_acc": val_acc_mean}
+        val_prc_mean /= len(outputs)
+        val_rec_mean /= len(outputs)
+        val_f1_mean /= len(outputs)
+        tqdm_dict = {"val_loss": val_loss_mean,
+                     "val_acc": val_acc_mean,
+                     "val_prc": val_prc_mean,
+                     "val_rec": val_rec_mean,
+                     "val_f1": val_f1_mean}
         result = {
             "progress_bar": tqdm_dict,
             "log": tqdm_dict,

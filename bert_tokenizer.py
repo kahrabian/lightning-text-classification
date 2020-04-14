@@ -61,7 +61,7 @@ class BERTTextEncoder(TextEncoder):
             - torch.Tensor: Encoding of the 'sequence'.
         """
         sequence = TextEncoder.encode(self, sequence)
-        vector = self.tokenizer.encode(sequence)
+        vector = self.tokenizer.encode(sequence, max_length=512)
         return torch.tensor(vector)
 
     def batch_encode(self, iterator, dim=0, **kwargs) -> (torch.Tensor, torch.Tensor):
