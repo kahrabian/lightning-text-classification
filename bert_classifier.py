@@ -213,10 +213,14 @@ class BERTClassifier(pl.LightningModule):
         val_acc = torch.sum(y == labels_hat).item() / (len(y) * 1.0)
         val_acc = torch.tensor(val_acc)
 
-        val_prc = torch.sum((y == 1) & (labels_hat == 1)).item() / (torch.sum(y == 1).item() * 1.0)
+        val_tp = torch.sum((y == 1) & (labels_hat == 1)).item()
+        val_fp = torch.sum((y == 0) & (labels_hat == 1)).item()
+        val_fn = torch.sum((y == 1) & (labels_hat == 0)).item()
+
+        val_prc = val_tp / ((val_tp + val_fp) * 1.0)
         val_prc = torch.tensor(val_prc)
 
-        val_rec = torch.sum((y == 1) & (labels_hat == 1)).item() / (torch.sum(labels_hat == 1).item() * 1.0)
+        val_rec = val_tp / ((val_tp + val_fn) * 1.0)
         val_rec = torch.tensor(val_rec)
 
         val_f1 = 2 * val_prc * val_rec / (val_prc + val_rec)
