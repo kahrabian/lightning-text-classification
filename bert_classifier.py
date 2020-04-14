@@ -214,8 +214,13 @@ class BERTClassifier(pl.LightningModule):
         val_acc = torch.tensor(val_acc)
 
         val_prc = torch.sum((y == 1) & (labels_hat == 1)).item() / (torch.sum(y == 1).item() * 1.0)
+        val_prc = torch.tensor(val_prc)
+
         val_rec = torch.sum((y == 1) & (labels_hat == 1)).item() / (torch.sum(labels_hat == 1).item() * 1.0)
+        val_rec = torch.tensor(val_rec)
+
         val_f1 = 2 * val_prc * val_rec / (val_prc + val_rec)
+        val_f1 = torch.tensor(val_f1)
 
         if self.on_gpu:
             val_acc = val_acc.cuda(loss_val.device.index)
