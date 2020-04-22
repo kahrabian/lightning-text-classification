@@ -218,16 +218,16 @@ class BERTClassifier(pl.LightningModule):
         val_fp = torch.sum((y == 0) & (labels_hat == 1)).item()
         val_fn = torch.sum((y == 1) & (labels_hat == 0)).item()
 
-        val_prc_min = val_tn / ((val_tn + val_fn) * 1.0) if (val_tn + val_fn) != 0 else 1
-        val_rec_min = val_tn / ((val_tn + val_fp) * 1.0) if (val_tn + val_fp) != 0 else 1
+        prc_min = val_tn / ((val_tn + val_fn) * 1.0) if (val_tn + val_fn) != 0 else 1
+        rec_min = val_tn / ((val_tn + val_fp) * 1.0) if (val_tn + val_fp) != 0 else 1
 
-        val_f1_min = 2 * val_prc_min * val_rec_min / (val_prc_min + val_rec_min)
+        val_f1_min = 2 * prc_min * rec_min / (prc_min + rec_min) if (prc_min + rec_min) != 0 else 0
         val_f1_min = torch.tensor(val_f1_min)
 
-        val_prc_maj = val_tp / ((val_tp + val_fp) * 1.0) if (val_tp + val_fp) != 0 else 1
-        val_rec_maj = val_tp / ((val_tp + val_fn) * 1.0) if (val_tp + val_fn) != 0 else 1
+        prc_maj = val_tp / ((val_tp + val_fp) * 1.0) if (val_tp + val_fp) != 0 else 1
+        rec_maj = val_tp / ((val_tp + val_fn) * 1.0) if (val_tp + val_fn) != 0 else 1
 
-        val_f1_maj = 2 * val_prc_maj * val_rec_maj / (val_prc_maj + val_rec_maj)
+        val_f1_maj = 2 * prc_maj * rec_maj / (prc_maj + rec_maj) if (prc_maj + rec_maj) != 0 else 0
         val_f1_maj = torch.tensor(val_f1_maj)
 
         if self.on_gpu:
