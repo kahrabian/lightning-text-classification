@@ -303,6 +303,23 @@ class BERTClassifier(pl.LightningModule):
         }
         return result
 
+    def test_step(self, batch: tuple, batch_nb: int, *args, **kwargs) -> dict:
+        """ Similar to the training step but with the model in eval mode.
+
+        Returns:
+            - dictionary passed to the test_end function.
+        """
+        return self.validation_step(batch, batch_nb, *args, **kwargs)
+
+    def test_end(self, outputs: list) -> dict:
+        """ Function that takes as input a list of dictionaries returned by the test_step
+        function and measures the model performance accross the entire test set.
+
+        Returns:
+            - Dictionary with metrics to be added to the lightning logger.
+        """
+        return self.validation_end(outputs)
+
     def configure_optimizers(self):
         """ Sets different Learning rates for different parameter groups. """
         parameters = [
