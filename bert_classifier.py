@@ -214,36 +214,38 @@ class BERTClassifier(pl.LightningModule):
         val_acc = torch.tensor(val_acc)
 
         val_tp = torch.sum((y == 1) & (labels_hat == 1)).item()
+        val_tn = torch.sum((y == 0) & (labels_hat == 0)).item()
         val_fp = torch.sum((y == 0) & (labels_hat == 1)).item()
         val_fn = torch.sum((y == 1) & (labels_hat == 0)).item()
 
-        val_prc = val_tp / ((val_tp + val_fp) * 1.0) if (val_tp + val_fp) != 0 else 1
-        val_prc = torch.tensor(val_prc)
+        val_prc_min = val_tn / ((val_tn + val_fn) * 1.0) if (val_tn + val_fn) != 0 else 1
+        val_rec_min = val_tn / ((val_tn + val_fp) * 1.0) if (val_tn + val_fp) != 0 else 1
 
-        val_rec = val_tp / ((val_tp + val_fn) * 1.0) if (val_tp + val_fn) != 0 else 1
-        val_rec = torch.tensor(val_rec)
+        val_f1_min = 2 * val_prc_min * val_rec_min / (val_prc_min + val_rec_min)
+        val_f1_min = torch.tensor(val_f1_min)
 
-        val_f1 = 2 * val_prc * val_rec / (val_prc + val_rec)
+        val_prc_maj = val_tp / ((val_tp + val_fp) * 1.0) if (val_tp + val_fp) != 0 else 1
+        val_rec_maj = val_tp / ((val_tp + val_fn) * 1.0) if (val_tp + val_fn) != 0 else 1
+
+        val_f1_maj = 2 * val_prc_maj * val_rec_maj / (val_prc_maj + val_rec_maj)
+        val_f1_maj = torch.tensor(val_f1_maj)
 
         if self.on_gpu:
             val_acc = val_acc.cuda(loss_val.device.index)
-            val_prc = val_prc.cuda(loss_val.device.index)
-            val_rec = val_rec.cuda(loss_val.device.index)
-            val_f1 = val_f1.cuda(loss_val.device.index)
+            val_f1_min = val_f1_min.cuda(loss_val.device.index)
+            val_f1_maj = val_f1_maj.cuda(loss_val.device.index)
 
         # in DP mode (default) make sure if result is scalar, there's another dim in the beginning
         if self.trainer.use_dp or self.trainer.use_ddp2:
             loss_val = loss_val.unsqueeze(0)
             val_acc = val_acc.unsqueeze(0)
-            val_prc = val_prc.unsqueeze(0)
-            val_rec = val_rec.unsqueeze(0)
-            val_f1 = val_f1.unsqueeze(0)
+            val_f1_min = val_f1_min.unsqueeze(0)
+            val_f1_maj = val_f1_maj.unsqueeze(0)
 
         output = OrderedDict({"val_loss": loss_val,
                               "val_acc": val_acc,
-                              "val_prc": val_prc,
-                              "val_rec": val_rec,
-                              "val_f1": val_f1})
+                              "val_f1_min": val_f1_min,
+                              "val_f1_maj": val_f1_maj})
 
         # can also return just a scalar instead of a dict (return loss_val)
         return output
@@ -257,9 +259,8 @@ class BERTClassifier(pl.LightningModule):
         """
         val_loss_mean = 0
         val_acc_mean = 0
-        val_prc_mean = 0
-        val_rec_mean = 0
-        val_f1_mean = 0
+        val_f1_min_mean = 0
+        val_f1_maj_mean = 0
         for output in outputs:
             val_loss = output["val_loss"]
 
@@ -275,34 +276,26 @@ class BERTClassifier(pl.LightningModule):
 
             val_acc_mean += val_acc
 
-            val_prc = output["val_prc"]
+            val_f1_min = output["val_f1_min"]
             if self.trainer.use_dp or self.trainer.use_ddp2:
-                val_prc = torch.mean(val_prc)
+                val_f1_min = torch.mean(val_f1_min)
 
-            val_prc_mean += val_prc
+            val_f1_min_mean += val_f1_min
 
-            val_rec = output["val_rec"]
+            val_f1_maj = output["val_f1_maj"]
             if self.trainer.use_dp or self.trainer.use_ddp2:
-                val_rec = torch.mean(val_rec)
+                val_f1_maj = torch.mean(val_f1_maj)
 
-            val_rec_mean += val_rec
-
-            val_f1 = output["val_f1"]
-            if self.trainer.use_dp or self.trainer.use_ddp2:
-                val_f1 = torch.mean(val_f1)
-
-            val_f1_mean += val_f1
+            val_f1_maj_mean += val_f1_maj
 
         val_loss_mean /= len(outputs)
         val_acc_mean /= len(outputs)
-        val_prc_mean /= len(outputs)
-        val_rec_mean /= len(outputs)
-        val_f1_mean /= len(outputs)
+        val_f1_min_mean /= len(outputs)
+        val_f1_maj_mean /= len(outputs)
         tqdm_dict = {"val_loss": val_loss_mean,
                      "val_acc": val_acc_mean,
-                     "val_prc": val_prc_mean,
-                     "val_rec": val_rec_mean,
-                     "val_f1": val_f1_mean}
+                     "val_f1_min": val_f1_min_mean,
+                     "val_f1_maj": val_f1_maj_mean}
         result = {
             "progress_bar": tqdm_dict,
             "log": tqdm_dict,
